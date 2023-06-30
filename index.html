@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8"/>
+        <link rel="stylesheet" href="styles.css"/>
+        <script type="text/javascript" src="dialog.js"></script>
+        <title>Test js task</title>
+    </head>
+    <body>
+        <h1>Список пользователей</h1>
+        <div class="search-pannel">
+            <form class="nosubmit">
+                <input type="search" class="nosubmit" id="searchInput" placeholder="Поиск по имени или e-mail"/>
+            </form>
+            <button id="clearFilterButton" onclick="clearFilter()" class="clear-search-button">Очистить фильтр</button>
+        </div >
+        <!-- style="position: absolute; bottom: 25px; right: 10px; left: 10px;" -->
+        <div>
+            <div style="margin-bottom: 0.5rem;">
+                <label class="sortable-text">Сортировка:</label>
+                <label class="sortable-text" id="dateSort" onclick="sortByDate()">Дата регистрации</label>
+                <label class="sortable-text" id="ratingSort" onclick="sortByRating()">Рейтинг</label>
+            </div>
+            <div class="data-pannel">
+                <table class="table">
+                    <tbody id="tbody">
+                        <thead class="table-header">
+                            <td>Имя пользователя</td>
+                            <td>E-mail</td>
+                            <td>Дата регистрации</td>
+                            <td>Рейтинг</td>
+                        </thead>
+                    </tbody>
+                </table>
+                <div class="page-button-group">
+                    <button class="page-button" onclick="previousPage()"><<</button>
+                    <p class="page-display" id="pageDisplayNumber"></p>
+                    <button class="page-button" onclick="nextPage()">>></button>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
+
+<script type="text/javascript">
+    var users;
+    var itemsCount = Number();
+    var selectedUsers;
+    var sort = Boolean();
+    var pageNumber = Number();
+
+    window.onload = init;
+
+    async function init(){
+        users = await getJSON('https://5ebbb8e5f2cfeb001697d05c.mockapi.io/users');
+        selectedUsers = users;
+        pageNumber = 1;
+        itemsCount = 5;
+        await updatePage(selectedUsers);
+        sort = true;
+    }
+
+    async function getJSON(url) {
+        let data = await (await fetch(url)).json();
+        return data;
+    }
+
+    async function updateTable(elements) {
+        tbody.innerHTML = '';
+        elements.forEach(element => {
+            let tr = '<tr class="table-tr">';
+            let date = Date.parse(element.registration_date);
+            tr += `<td class="user-name">${element.username}</td><td>${element.email}</td><td>`;
+            tr += new Date(date).toLocaleDateString("ru-RU") + `</td><td>${element.rating}</td>`;
+            tr += '<td><button class="delete-button" onclick="removeUser(value)"';
+            tr += `value="${element.id}"></button></td></tr>`;
+            tbody.innerHTML += tr;
+        });
+    }    
+
+    async function findUsers(username, email) {
+        document.getElementById("clearFilterButton").style.display = 'block';
+        selectedUsers = users.filter(x =>
+            x.username.toLowerCase().indexOf(username.toLowerCase()) >= 0 ||
+            x.email.toLowerCase().indexOf(email.toLowerCase()) >= 0);
+        await updatePage(selectedUsers);
+    }
+
+    async function clearFilter() {
+        document.getElementById("clearFilterButton").style.display = 'none';
+        document.getElementById("dateSort").className = 'sortable-text';
+        document.getElementById("ratingSort").className = 'sortable-text';
+        searchInput.value = '';
+        users.sort((a, b) => {
+            return new Number(a.id) - new Number(b.id);
+        });
+        selectedUsers = users;
+        await updatePage(selectedUsers);
+    }
+
+    searchInput.addEventListener('keyup', function() {
+        let search = searchInput.value;
+        findUsers(search, search);
+    });
+
+    async function sortByDate(){
+        document.getElementById("clearFilterButton").style.display = 'block';
+        document.getElementById("ratingSort").className = 'sortable-text';
+        document.getElementById("dateSort").className = 'sortable-text--selected';
+        selectedUsers.sort((a, b) =>{
+            if(sort)
+                return new Date(b.registration_date) - new Date(a.registration_date);
+            else
+                return new Date(a.registration_date) - new Date(b.registration_date);
+        });
+        sort = !sort;
+        await updatePage(selectedUsers);
+    }
+
+    async function sortByRating(){
+        document.getElementById("clearFilterButton").style.display = 'block';
+        document.getElementById("dateSort").className = 'sortable-text';
+        document.getElementById("ratingSort").className = 'sortable-text--selected';
+        selectedUsers.sort((a, b) => {
+            if(sort)
+                return new Number(b.rating) - new Number(a.rating);
+            else
+                return new Number(a.rating) - new Number(b.rating);
+        });
+        sort = !sort;
+        await updatePage(selectedUsers);
+    }
+
+    async function removeUser(value){
+        const dialog = new ConfirmDialog({
+            questionText: 'Вы уверены, что хотите удалить пользователя?',
+            trueButtonText: 'Да',
+            falseButtonText: 'Нет',
+        });
+        if(!(await dialog.confirm()))
+            return;
+        users = users.filter(x => x.id !== value);
+        selectedUsers = users;
+        searchInput.value = '';
+        await updatePage(selectedUsers);
+    }
+
+    async function updatePage(selectedUsers){
+        let count = Math.ceil(selectedUsers.length/itemsCount);
+        if(pageNumber < 1)
+            pageNumber = 1;
+        if(pageNumber >= count)
+            pageNumber = count;
+        let filteredUsers = selectedUsers.filter(x => 
+            new Number(selectedUsers.indexOf(x)) >= new Number((pageNumber - 1) * itemsCount) &&
+            new Number(selectedUsers.indexOf(x)) < new Number(pageNumber * itemsCount));
+        console.log(`${pageNumber} - filtered: ${filteredUsers.length} selected: ${selectedUsers.length}`);
+        await updateTable(filteredUsers);
+        document.getElementById("pageDisplayNumber").innerText = `${pageNumber} из ${count}`;
+    }
+
+    function nextPage(){
+        pageNumber += 1;
+        updatePage(selectedUsers);
+    }
+
+    function previousPage(){
+        pageNumber -= 1;
+        updatePage(selectedUsers);
+    }
+
+</script>
